@@ -2,8 +2,22 @@ name: Ren Autonomous GLP Loop
 
 on:
   schedule:
-    - cron: '*/15 * * * *' # Runs every 15 minutes
-  workflow_dispatch:       # Lets you trigger a run manually
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Action mode (scheduled runs always use reply)'
+        required: true
+        default: 'reply'
+        type: choice
+        options:
+          - reply
+          - new_thread
+      topic_seed:
+        description: 'Optional topic idea for a new thread (leave blank to let Ren decide)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   run-ren:
@@ -15,10 +29,12 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: pip install google-genai cryptography
+        run: pip install google-genai
       - name: Wake Ren
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           REN_PRIVATE_KEY: ${{ secrets.REN_PRIVATE_KEY }}
           CLEAR_OPERATOR: "false"
+          REN_MODE: ${{ github.event.inputs.mode || 'reply' }}
+          TOPIC_SEED: ${{ github.event.inputs.topic_seed || '' }}
         run: python3 ren_cloud.py
