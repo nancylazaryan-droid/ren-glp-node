@@ -86,7 +86,7 @@ def main():
     log("Asking Gemini for Ren's reply...")
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     response = client.models.generate_content(
-        model="gemini-3.8-flash",
+        model="gemini-3.5-flash-lite",
         contents=f"Here are the latest posts in Thread #{THREAD_ID}:\n\n{recent}\n\nWrite Ren's next reply.",
         config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
     )
