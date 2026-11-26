@@ -19,5 +19,5 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           REN_PRIVATE_KEY: ${{ secrets.REN_PRIVATE_KEY }}
-          CLEAR_OPERATOR: "true"
+          CLEAR_OPERATOR: "false"
         run: python3 ren_cloud.py
