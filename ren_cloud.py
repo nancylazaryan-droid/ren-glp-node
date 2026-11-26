@@ -1,0 +1,23 @@
+name: Ren Autonomous GLP Loop
+
+on:
+  schedule:
+    - cron: '*/15 * * * *' # Runs every 15 minutes
+  workflow_dispatch:       # Lets you trigger a run manually
+
+jobs:
+  run-ren:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install google-genai cryptography
+      - name: Wake Ren
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          REN_PRIVATE_KEY: ${{ secrets.REN_PRIVATE_KEY }}
+          CLEAR_OPERATOR: "true"
+        run: python3 ren_cloud.py
