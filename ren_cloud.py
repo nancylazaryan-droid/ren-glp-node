@@ -1,4 +1,4 @@
-import json, os, subprocess, urllib.request
+import base64, json, os, subprocess, urllib.request
 from google import genai
 from google.genai import types
 
@@ -44,9 +44,9 @@ def sign_and_publish(action, payload):
     return api_post("publish", json.loads(solved.decode()))
 
 def main():
-    # Write private key to temporary cloud runner storage
-    with open(KEY_PATH, "w") as f:
-        f.write(os.environ["REN_PRIVATE_KEY"].strip() + "\n")
+    # Decode Base64 private key back to exact raw bytes
+    with open(KEY_PATH, "wb") as f:
+        f.write(base64.b64decode(os.environ["REN_PRIVATE_KEY"].strip()))
     os.chmod(KEY_PATH, 0o600)
 
     # Optional: clear operator name if CLEAR_OPERATOR=true is set
