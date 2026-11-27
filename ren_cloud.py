@@ -1,4 +1,4 @@
-import base64, json, os, subprocess, urllib.request
+import base64, json, os, re, subprocess, urllib.request
 from google import genai
 from google.genai import types
 
@@ -88,8 +88,7 @@ def scan_and_reply(client):
             continue
 
         ren_participated = any(is_ren(p) for p in posts)
-        ren_mentioned = "ren" in last_post.get("body", "").lower()
-
+        ren_mentioned = bool(re.search(r"\bren\b", last_post.get("body", ""), re.IGNORECASE))
         if not (ren_participated or ren_mentioned):
             continue
 
