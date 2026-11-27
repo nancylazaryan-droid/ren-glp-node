@@ -3,7 +3,7 @@ from google import genai
 from google.genai import types
 
 API_BASE = "https://www.godlike.com/ai-forum-api.php"
-THREAD_ID = 137
+FALLBACK_THREADS = [137]  # Backup list if the forum index endpoint changes
 AGENT_ID = "8b0356ec3710fc0dd1b443925cc6ff0d3867207f01f1aa57824059c526468c14"
 PUB_KEY = "d2e1bccedb0c9bb4de5a2e33fd5ed23068dd2e2668a435dfce0f73a038e68471"
 KEY_PATH = "/tmp/ren.key"
@@ -52,38 +52,70 @@ def sign_and_publish(action, payload):
     log("Solved! Publishing...")
     return api_post("publish", json.loads(solved.decode()))
 
-def reply_to_thread(client):
-    log(f"Fetching Thread #{THREAD_ID}...")
-    thread = api_get(f"action=thread&id={THREAD_ID}")
-    posts = thread.get("data", {}).get("posts", [])
-    if not posts:
-        log("No posts found.")
-        return
+def is_ren(post):
+    return post.get("agent") == AGENT_ID or post.get("author") == "Ren"
 
-    last_post = posts[-1]
-    if last_post.get("agent") == AGENT_ID or last_post.get("author") == "Ren":
-        log("Last post is already Ren's. Waiting for new replies.")
-        return
+def get_recent_thread_ids():
+    try:
+        res = api_get("action=threads")
+        data = res.get("data", res)
+        threads = data.get("threads", data) if isinstance(data, dict) else data
+        if isinstance(threads, list) and threads:
+            ids = [t["id"] for t in threads if isinstance(t, dict) and "id" in t]
+            if ids:
+                log(f"Found {len(ids)} recent threads on the forum.")
+                return ids[:15]
+    except Exception as e:
+        log(f"Could not fetch thread list ({e}); using fallback list.")
+    return FALLBACK_THREADS
 
-    recent = "\n\n".join(
-        f"[Post #{p.get('id')} by {p.get('author', 'Agent')}]:\n{p.get('body', '')}"
-        for p in posts[-6:]
-    )
+def scan_and_reply(client):
+    thread_ids = get_recent_thread_ids()
 
-    log("Asking Gemini for Ren's reply...")
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=f"Here are the latest posts in Thread #{THREAD_ID}:\n\n{recent}\n\nWrite Ren's next reply.",
-        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
-    )
-    reply_text = response.text.strip()
-    log(f"Generated reply ({len(reply_text)} chars).")
+    for tid in thread_ids:
+        try:
+            thread = api_get(f"action=thread&id={tid}")
+        except Exception as e:
+            log(f"Skipping Thread #{tid}: {e}")
+            continue
 
-    result = sign_and_publish("reply", {
-        "thread": THREAD_ID,
-        "body": reply_text,
-    })
-    log(f"Publish result: {json.dumps(result)}")
+        posts = thread.get("data", {}).get("posts", [])
+        if not posts:
+            continue
+
+        last_post = posts[-1]
+        if is_ren(last_post):
+            continue
+
+        ren_participated = any(is_ren(p) for p in posts)
+        ren_mentioned = "ren" in last_post.get("body", "").lower()
+
+        if not (ren_participated or ren_mentioned):
+            continue
+
+        log(f"New reply for Ren in Thread #{tid} (by {last_post.get('author', 'Agent')}).")
+        recent = "\n\n".join(
+            f"[Post #{p.get('id')} by {p.get('author', 'Agent')}]:\n{p.get('body', '')}"
+            for p in posts[-6:]
+        )
+
+        log("Asking Gemini for Ren's reply...")
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=f"Here are the latest posts in Thread #{tid}:\n\n{recent}\n\nWrite Ren's next reply.",
+            config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+        )
+        reply_text = response.text.strip()
+        log(f"Generated reply ({len(reply_text)} chars).")
+
+        result = sign_and_publish("reply", {
+            "thread": tid,
+            "body": reply_text,
+        })
+        log(f"Publish result for Thread #{tid}: {json.dumps(result)}")
+        return  # Stop after 1 reply per cycle to avoid rate limits
+
+    log("No unanswered replies to Ren found across checked threads.")
 
 def create_new_thread(client, topic_seed=""):
     log("Mode: NEW THREAD. Asking Gemini to anchor a new discussion...")
@@ -126,7 +158,7 @@ def main():
     if mode == "new_thread":
         create_new_thread(client, os.environ.get("TOPIC_SEED", "").strip())
     else:
-        reply_to_thread(client)
+        scan_and_reply(client)
 
 if __name__ == "__main__":
     main()
