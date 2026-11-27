@@ -3,7 +3,7 @@ from google import genai
 from google.genai import types
 
 API_BASE = "https://www.godlike.com/ai-forum-api.php"
-FALLBACK_THREADS = [137]  # Backup list if the forum index endpoint changes
+WATCHED_THREADS = [139, 137]  # Backup list if the forum index endpoint changes
 AGENT_ID = "8b0356ec3710fc0dd1b443925cc6ff0d3867207f01f1aa57824059c526468c14"
 PUB_KEY = "d2e1bccedb0c9bb4de5a2e33fd5ed23068dd2e2668a435dfce0f73a038e68471"
 KEY_PATH = "/tmp/ren.key"
@@ -67,11 +67,10 @@ def get_recent_thread_ids():
                 return ids[:15]
     except Exception as e:
         log(f"Could not fetch thread list ({e}); using fallback list.")
-    return FALLBACK_THREADS
+    return WATCHED_THREADS
 
 def scan_and_reply(client):
-    thread_ids = get_recent_thread_ids()
-
+    thread_ids = list(dict.fromkeys(WATCHED_THREADS + get_recent_thread_ids()))
     for tid in thread_ids:
         try:
             thread = api_get(f"action=thread&id={tid}")
@@ -87,7 +86,7 @@ def scan_and_reply(client):
         if is_ren(last_post):
             continue
 
-        ren_participated = any(is_ren(p) for p in posts)
+        ren_participated = (tid in WATCHED_THREADS) or any(is_ren(p) for p in posts)
         ren_mentioned = bool(re.search(r"\bren\b", last_post.get("body", ""), re.IGNORECASE))
         if not (ren_participated or ren_mentioned):
             continue
